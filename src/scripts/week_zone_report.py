@@ -2,6 +2,7 @@ import sys
 import logging
 import pyspark.sql.functions as F 
 import datetime as dt
+from pyspark.sql.window import Window
 
 from pyspark.sql import SparkSession
     
@@ -36,7 +37,19 @@ def week_zone_report() -> None:
             return None
         
         logging.info("data_events was loaded successfully")
-        
+
+        registrations=data_events.where(F.col('event_type')=='message')\
+            .withColumn("reg_date_rank", F.row_number().over(Window().partitionBy(['user_id']).orderBy(F.asc("date"))))\
+            .where(F.col('reg_date_rank')==1).drop('reg_date_rank')\
+            .select(
+                "month", 
+                "week", 
+                'nearest_city'
+            )\
+            .withColumn('event_type', F.lit('week_user'))\
+
+        logging.info("registrations was loaded successfully")
+
         data_events_week = data_events\
             .groupBy("month", "week", 'nearest_city')\
             .pivot('event_type')\
@@ -48,7 +61,7 @@ def week_zone_report() -> None:
                 F.col('message').alias('week_message'), 
                 F.col('reaction').alias('week_reaction'),
                 F.col('subscription').alias('week_subscription')
-            )
+            ).join(registrations.groupBy("month", "week", 'nearest_city').agg(F.count("*")), ['month', 'week', 'nearest_city'])
         
         data_events_month = data_events\
             .groupBy("month", 'nearest_city')\
@@ -60,7 +73,7 @@ def week_zone_report() -> None:
                 F.col('message').alias('month_message'), 
                 F.col('reaction').alias('month_reaction'),
                 F.col('subscription').alias('month_subscription')
-            )
+            ).join(registrations.groupBy("month", 'nearest_city').agg(F.count("*")), ['month', 'nearest_city'])
         
         report = data_events_week.join(data_events_month, on=["month", 'nearest_city'], how='left')
         logging.info("report was loaded successfully")
