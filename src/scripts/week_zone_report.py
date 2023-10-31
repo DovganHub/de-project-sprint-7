@@ -73,8 +73,8 @@ def week_zone_report() -> None:
                 F.col('message').alias('month_message'), 
                 F.col('reaction').alias('month_reaction'),
                 F.col('subscription').alias('month_subscription')
-            ).join(registrations.groupBy("month", 'nearest_city').agg(F.count("*")), ['month', 'nearest_city'])
-        
+            ).join(registrations.groupBy("month", 'nearest_city').agg(F.count("*").select("month", 'nearest_city', F.col('week_user').alias('month_user'))), ['month', 'nearest_city'])
+
         report = data_events_week.join(data_events_month, on=["month", 'nearest_city'], how='left')
         logging.info("report was loaded successfully")
         
